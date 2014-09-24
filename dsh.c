@@ -1,3 +1,4 @@
+
 #include "dsh.h"
 
 void seize_tty(pid_t callingprocess_pgid); /* Grab control of the terminal for the calling process pgid.  */
@@ -59,6 +60,7 @@ void spawn_job(job_t *j, bool fg)
 	  /* Builtin commands are already taken care earlier */
 	  
 	  switch (pid = fork()) {
+      int status;
 
           case -1: /* fork failure */
             perror("fork");
@@ -69,6 +71,21 @@ void spawn_job(job_t *j, bool fg)
             new_child(j, p, fg);
             
 	    /* YOUR CODE HERE?  Child-side code for new process. */
+
+            if (p->ifile != NULL)
+            {
+              int fd = open(p->ifile, O_RDONLY);
+              dup2 (fd, STDIN_FILENO);
+            }
+
+            if (p->ofile != NULL)
+            {
+              int fd = open(p->ofile, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+              dup2 (fd, STDOUT_FILENO);
+            }
+
+
+            execvp(p->argv[0], p->argv);
             perror("New child should have done an exec");
             exit(EXIT_FAILURE);  /* NOT REACHED */
             break;    /* NOT REACHED */
@@ -77,8 +94,11 @@ void spawn_job(job_t *j, bool fg)
             /* establish child process group */
             p->pid = pid;
             set_child_pgid(j, p);
+            waitpid (pid, &status, 0);
 
             /* YOUR CODE HERE?  Parent-side code for new process.  */
+
+            //wait for child to finish
           }
 
             /* YOUR CODE HERE?  Parent-side code for new job.*/
@@ -161,5 +181,11 @@ int main()
             /* spawn_job(j,true) */
             /* else */
             /* spawn_job(j,false) */
+
+        while (j != NULL)
+        {
+          spawn_job(j, true);
+          j = j->next;
+        }
     }
 }
