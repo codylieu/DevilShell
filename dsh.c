@@ -7,6 +7,8 @@ void spawn_job(job_t *j, bool fg); /* spawn a new job */
 
 job_t* active_jobs_head = NULL;
 job_t* active_jobs = NULL;
+job_t* stopped_jobs_head = NULL;
+job_t* stopped_jobs = NULL;
 
 /* Sets the process group id for a given job and process */
 int set_child_pgid(job_t *j, process_t *p)
@@ -157,6 +159,26 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
   }
   else if (!strcmp("fg", argv[0])) {
     /* Your code here */
+    if(argv[1] == NULL) {
+      // continue most recent stopped job
+    }
+    else {
+      // Not sure if I can cast this
+      pid_t job_number = (int) &argv[1];
+      job_t* head = active_jobs_head;
+      while(head != NULL) {
+        // Need to eventually iterate through all processes?
+        if((head->first_process)->stopped == true && head->pgid == job_number) {
+          continue_job(head);
+        }
+        else if (head->pgid == job_number) {
+          printf("%s\n", "This process wasn't stopped`");
+        }
+        else {
+          printf("%s\n", "Job number wasn't found");
+        }
+      }
+    }
   }
   /* not a builtin command */
   return false;
@@ -196,7 +218,7 @@ int main()
 
         /* Only for debugging purposes to show parser output; turn off in the
          * final code */
-    // if(PRINT_INFO) print_job(j);
+    if(PRINT_INFO) print_job(j);
 
         /* Your code goes here */
         /* You need to loop through jobs list since a command line can contain ;*/
@@ -218,6 +240,7 @@ int main()
         active_jobs->next = j;
         active_jobs = active_jobs->next;
       }
+      // if not a command at all ?
       bool is_built_in_cmd = builtin_cmd(j, (j->first_process)->argc, (j->first_process)->argv);
       if(!is_built_in_cmd) {
         spawn_job(j, true);
