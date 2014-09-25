@@ -127,14 +127,15 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
 
         if (!strcmp("quit", argv[0])) {
             /* Your code here */
-            exit(EXIT_SUCCESS);
+            // exit(EXIT_SUCCESS);
 	      }
         else if (!strcmp("jobs", argv[0])) {
             /* Your code here */
             return true;
         }
 	      else if (!strcmp("cd", argv[0])) {
-            /* Your code here */
+            char* path = argv[1];
+            chdir(path);
         }
         else if (!strcmp("bg", argv[0])) {
             /* Your code here */
@@ -187,8 +188,8 @@ int main()
           bool is_built_in_cmd = builtin_cmd(j, (j->first_process)->argc, (j->first_process)->argv);
           if(!is_built_in_cmd) {
             spawn_job(j, true);
-            j = j->next;
           }
+          j = j->next;
         }
     }
 }
