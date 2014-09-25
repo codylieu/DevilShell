@@ -163,32 +163,29 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
 }
 
 /* Build prompt messaage */
-char* promptmsg() 
-{
-  // Modify this to include pid 
-	return "dsh$ ";
-}
-
-// char* promptmsg(pid_t dsh_pgid) 
+// char* promptmsg() 
 // {
-//     /* Modify this to include pid */
-//   char *first_part = "dsh-";
-//   char *last_part = "$ "; 
-//   char *msg = malloc(strlen(first_part) + strlen(last_part) + sizeof(pid_t) + 1);
-//   strcpy(msg, first_part);
-//   strcat(msg, dsh_pgid);
-//   strcat(msg, last_part);
-//   return msg;
+//   // Modify this to include pid 
+// 	return "dsh$ ";
 // }
+
+char* promptmsg(pid_t dsh_pgid) 
+{
+  /* Modify this to include pid */
+  char msg[80];
+  sprintf(msg, "dsh-%d$ ", dsh_pgid);
+  char* result = msg;
+  return result;
+}
 
 int main() 
 {
-	init_dsh();
+	int dsh_pgid = init_dsh();
 	DEBUG("Successfully initialized\n");
 
 	while(1) {
     job_t *j = NULL;
-    if(!(j = readcmdline(promptmsg()))) {
+    if(!(j = readcmdline(promptmsg(dsh_pgid)))) {
 			if (feof(stdin)) { /* End of file (ctrl-d) */
         fflush(stdout);
         printf("\n");
@@ -212,7 +209,7 @@ int main()
 
     while (j != NULL)
     {
-
+      // if EOF builtincmd of quit
       if(active_jobs == NULL) {
         active_jobs_head = j;
         active_jobs = j;
