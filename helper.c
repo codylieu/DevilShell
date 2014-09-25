@@ -156,7 +156,7 @@ void init_dsh()
 			exit(EXIT_FAILURE);
 		}
 		seize_tty(dsh_pgid);
-	} 
+	}
 }
 
 /* Prints the jobs in the list.  */

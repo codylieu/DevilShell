@@ -5,13 +5,14 @@ void seize_tty(pid_t callingprocess_pgid); /* Grab control of the terminal for t
 void continue_job(job_t *j); /* resume a stopped job */
 void spawn_job(job_t *j, bool fg); /* spawn a new job */
 
-job_t* all_jobs = NULL;
+job_t* active_jobs_head = NULL;
+job_t* active_jobs = NULL;
 
 /* Sets the process group id for a given job and process */
 int set_child_pgid(job_t *j, process_t *p)
 {
-    if (j->pgid < 0) /* first child: use its pid for job pgid */
-  j->pgid = p->pid;
+  if (j->pgid < 0) /* first child: use its pid for job pgid */
+    j->pgid = p->pid;
   return(setpgid(p->pid,j->pgid));
 }
 
@@ -50,19 +51,18 @@ void new_child(job_t *j, process_t *p, bool fg)
  * subsequent processes in a pipeline.
  * */
 
- void spawn_job(job_t *j, bool fg) 
- {
+void spawn_job(job_t *j, bool fg) 
+{
 
-   pid_t pid;
-   process_t *p;
-
-   for(p = j->first_process; p; p = p->next) {
+  pid_t pid;
+  process_t *p;
+  for(p = j->first_process; p; p = p->next) {
 
 	  /* YOUR CODE HERE? */
 	  /* Builtin commands are already taken care earlier */
 
     switch (pid = fork()) {
-      int status;
+      // int status;
 
       case -1: /* fork failure */
         perror("fork");
@@ -86,6 +86,7 @@ void new_child(job_t *j, process_t *p, bool fg)
           dup2 (fd, STDOUT_FILENO);
         }
 
+        printf("%d (Launched): %s\n", j->pgid, j->commandinfo);
 
         execvp(p->argv[0], p->argv);
         perror("New child should have done an exec");
@@ -93,21 +94,24 @@ void new_child(job_t *j, process_t *p, bool fg)
         break;    /* NOT REACHED */
 
       default: /* parent */
-            /* establish child process group */
+        /* establish child process group */
         p->pid = pid;
         set_child_pgid(j, p);
-        waitpid (pid, &status, 0);
 
-            /* YOUR CODE HERE?  Parent-side code for new process.  */
+        /* YOUR CODE HERE?  Parent-side code for new process.  */
+        // waitpid (pid, &status, 0);
+        wait(NULL);
+        p->completed = true;
 
-            //wait for child to finish
+        //wait for child to finish
     }
 
-            /* YOUR CODE HERE?  Parent-side code for new job.*/
-	    seize_tty(getpid()); // assign the terminal back to dsh
+    /* YOUR CODE HERE?  Parent-side code for new job.*/
 
-   }
- }
+	  seize_tty(getpid()); // assign the terminal back to dsh
+
+  }
+}
 
 /* Sends SIGCONT signal to wake up the blocked job */
 void continue_job(job_t *j) 
@@ -128,11 +132,20 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
         */
 
   if (!strcmp("quit", argv[0])) {
-            /* Your code here */
+    /* Your code here */
     exit(EXIT_SUCCESS);
   }
   else if (!strcmp("jobs", argv[0])) {
-            /* Your code here */
+    /* Your code here */
+    job_t* head = active_jobs_head;
+    while(head != NULL) {
+      // print active jobs and then change notified to 0
+      if((head->first_process)->completed == true && head->notified == false) {
+        printf("%d (Completed): %s\n", head->pgid, head->commandinfo);
+         head->notified = true;
+      }
+      head = head->next;
+    }
     return true;
   }
   else if (!strcmp("cd", argv[0])) {
@@ -140,36 +153,36 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
     return true;
   }
   else if (!strcmp("bg", argv[0])) {
-            /* Your code here */
+    /* Your code here */
   }
   else if (!strcmp("fg", argv[0])) {
-            /* Your code here */
+    /* Your code here */
   }
-  return false;       /* not a builtin command */
+  /* not a builtin command */
+  return false;
 }
 
 /* Build prompt messaage */
 char* promptmsg() 
 {
-    /* Modify this to include pid */
+  // Modify this to include pid 
 	return "dsh$ ";
 }
 
-// char* promptmsg2(pid_t pid) 
+// char* promptmsg(pid_t dsh_pgid) 
 // {
 //     /* Modify this to include pid */
 //   char *first_part = "dsh-";
 //   char *last_part = "$ "; 
 //   char *msg = malloc(strlen(first_part) + strlen(last_part) + sizeof(pid_t) + 1);
 //   strcpy(msg, first_part);
-//   strcat(msg, pid);
+//   strcat(msg, dsh_pgid);
 //   strcat(msg, last_part);
 //   return msg;
 // }
 
 int main() 
 {
-
 	init_dsh();
 	DEBUG("Successfully initialized\n");
 
@@ -186,7 +199,7 @@ int main()
 
         /* Only for debugging purposes to show parser output; turn off in the
          * final code */
-    if(PRINT_INFO) print_job(j);
+    // if(PRINT_INFO) print_job(j);
 
         /* Your code goes here */
         /* You need to loop through jobs list since a command line can contain ;*/
@@ -200,14 +213,14 @@ int main()
     while (j != NULL)
     {
 
-      if(all_jobs == null) {
-        all_jobs = j;
+      if(active_jobs == NULL) {
+        active_jobs_head = j;
+        active_jobs = j;
       }
       else {
-        all_jobs->next = j;
-        all_jobs = all_jobs->next;
+        active_jobs->next = j;
+        active_jobs = active_jobs->next;
       }
-
       bool is_built_in_cmd = builtin_cmd(j, (j->first_process)->argc, (j->first_process)->argv);
       if(!is_built_in_cmd) {
         spawn_job(j, true);
