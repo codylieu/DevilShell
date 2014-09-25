@@ -136,6 +136,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
 	      else if (!strcmp("cd", argv[0])) {
             char* path = argv[1];
             chdir(path);
+            return true;
         }
         else if (!strcmp("bg", argv[0])) {
             /* Your code here */
