@@ -18,6 +18,52 @@ int set_child_pgid(job_t *j, process_t *p)
   return(setpgid(p->pid,j->pgid));
 }
 
+//created method to wait for pid and check for status
+void waiting (process_t *p)
+{
+  int got_pid;
+  int status;
+  while ((got_pid = waitpid(p->pid, &status, WUNTRACED))) 
+  {
+    /* go to sleep until something happens */
+    /* wait woke up */
+    if (got_pid == p->pid)
+    {
+      break;
+    }
+                 
+    if ((got_pid == -1) && (errno != EINTR)) 
+    {
+    /* an error other than an interrupted system call */
+    printf("#####child process not exist\n");
+    p->completed=true;
+    break;
+    }
+  }
+
+    if( p->completed != true) 
+    {
+     p->status = status;
+
+     if (WIFEXITED(status)) /* process exited normally */
+     {
+      printf("child process exited with value %d\n", WEXITSTATUS(status));
+      p->completed=true;
+     }
+    else if (WIFSIGNALED(status)) /* child exited on a signal (ctrl c) */
+     {
+      printf("child process exited due to signal %d\n", WTERMSIG(status));
+      p->completed=true;
+     }
+
+    else if (WIFSTOPPED(status)) /* child was stopped/suspended (ctrl z) */
+     {
+      printf("child process was stopped by signal %d\n", WIFSTOPPED(status));
+      p->stopped=true;
+     }
+   }
+}
+
 /* Creates the context for a new child by setting the pid, pgid and tcsetpgrp */
 void new_child(job_t *j, process_t *p, bool fg)
 {
@@ -102,8 +148,11 @@ void spawn_job(job_t *j, bool fg)
 
         /* YOUR CODE HERE?  Parent-side code for new process.  */
         // waitpid (pid, &status, 0);
-        wait(NULL);
-        p->completed = true;
+        waiting(p);
+        //printf("P completed: %d", p->completed);
+        //printf("P Stopped: %d", p->stopped);
+        //wait(NULL);
+        //p->completed = true;
 
         //wait for child to finish
     }
@@ -139,17 +188,49 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
   }
   else if (!strcmp("jobs", argv[0])) {
     /* Your code here */
-    job_t* head = active_jobs_head;
-    while(head != NULL) {
+    job_t* currentJob = active_jobs_head;
+    job_t* deletedJob = NULL;
+
+    while(currentJob != NULL) {
       // print active jobs and then change notified to 0
-      if((head->first_process)->completed == true && head->notified == false) {
-        printf("%d (Completed): %s\n", head->pgid, head->commandinfo);
-         head->notified = true;
+
+      //if((currentJob->first_process)->completed == true && currentJob->notified == false) {
+
+      //need to check if every process has completed for a job to be complete, not just the first process
+      if (job_is_completed(currentJob) == true)
+      {
+        printf("%d (Completed): %s\n", currentJob->pgid, currentJob->commandinfo);
+        deletedJob = currentJob;
+
+         //currentJob->notified = true;
       }
-      head = head->next;
+      //otherwise it is stopped
+      else
+      {
+        printf("%d (Stopped): %s\n", currentJob->pgid, currentJob->commandinfo);
+      }
+
+      currentJob = currentJob->next;
+
+      // delete job after it is completed, don't need to save notified 
+     
+      if (deletedJob != NULL) 
+      {
+        if (deletedJob == active_jobs_head)
+        {
+          active_jobs_head = deletedJob->next;
+          free_job(deletedJob);
+        }
+        else
+        {
+          delete_job(deletedJob, active_jobs_head);
+        }
+        deletedJob = NULL;
+      }
     }
     return true;
   }
+
   else if (!strcmp("cd", argv[0])) {
     chdir(argv[1]);
     return true;
@@ -161,24 +242,34 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
     /* Your code here */
     if(argv[1] == NULL) {
       // continue most recent stopped job
+      //use find_last_job
     }
     else {
-      // Not sure if I can cast this
-      pid_t job_number = (int) &argv[1];
-      job_t* head = active_jobs_head;
-      while(head != NULL) {
+      pid_t job_number = atoi(argv[1]);
+      job_t* currentJob = active_jobs_head;
+
+      
+      while(currentJob != NULL) {
         // Need to eventually iterate through all processes?
-        if((head->first_process)->stopped == true && head->pgid == job_number) {
-          continue_job(head);
+        
+        if((currentJob->first_process)->stopped == true && currentJob->pgid == job_number) {
+          //seize_tty(currentJob->pgid);
+          continue_job(currentJob); 
+          seize_tty(currentJob->pgid);
+          waiting(currentJob->first_process); //TBD need to change when implementing pipes, since not always 1st process
+          seize_tty(getpid());
+          break;
         }
-        else if (head->pgid == job_number) {
+        else if (currentJob->pgid == job_number) {
           printf("%s\n", "This process wasn't stopped`");
         }
         else {
-          printf("%s\n", "Job number wasn't found");
+          printf("%s\n", "This job number is not the requested one");
         }
+        currentJob = currentJob->next;
       }
     }
+    return true;
   }
   /* not a builtin command */
   return false;
@@ -202,12 +293,12 @@ char* promptmsg(pid_t dsh_pgid)
 
 int main() 
 {
-	int dsh_pgid = init_dsh();
+	init_dsh();
 	DEBUG("Successfully initialized\n");
 
 	while(1) {
     job_t *j = NULL;
-    if(!(j = readcmdline(promptmsg(dsh_pgid)))) {
+    if(!(j = readcmdline(promptmsg(getpid())))) {
 			if (feof(stdin)) { /* End of file (ctrl-d) */
         fflush(stdout);
         printf("\n");
@@ -232,19 +323,30 @@ int main()
     while (j != NULL)
     {
       // if EOF builtincmd of quit
-      if(active_jobs == NULL) {
-        active_jobs_head = j;
-        active_jobs = j;
-      }
-      else {
-        active_jobs->next = j;
-        active_jobs = active_jobs->next;
-      }
+      //active jobs is last job?
+
       // if not a command at all ?
       bool is_built_in_cmd = builtin_cmd(j, (j->first_process)->argc, (j->first_process)->argv);
-      if(!is_built_in_cmd) {
+      if(!is_built_in_cmd) 
+      {
         spawn_job(j, true);
+
+        if(active_jobs_head == NULL) 
+        {
+        active_jobs_head = j;
+        //active_jobs = j;
+        }
+
+        else 
+        {
+        job_t *lastJob = find_last_job(active_jobs_head);
+        lastJob->next = j;
+        j->next = NULL;
+        //active_jobs->next = j;
+        //active_jobs = active_jobs->next;
+        }
       }
+
       j = j->next;
     }
   }

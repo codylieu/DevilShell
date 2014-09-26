@@ -124,7 +124,7 @@ void seize_tty(pid_t callingprocess_pgid)
  * then set the process group and signal handlers
  * */
 
-int init_dsh() 
+void init_dsh() 
 {
 
 	dsh_terminal_fd = STDIN_FILENO;
@@ -157,7 +157,6 @@ int init_dsh()
 		}
 		seize_tty(dsh_pgid);
 	}
-	return dsh_pgid;
 }
 
 /* Prints the jobs in the list.  */

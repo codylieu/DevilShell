@@ -89,7 +89,7 @@ bool init_process(process_t *p);
 void print_job();
 
 /* Bootstrapping for dsh shell for interactive mode */
-int init_dsh();
+void init_dsh();
 
  /* Grab control of the terminal for the calling process pgid.  */
 void seize_tty(pid_t callingprocess_pgid);
