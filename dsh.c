@@ -219,7 +219,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
         if (deletedJob == active_jobs_head)
         {
           active_jobs_head = deletedJob->next;
-          free_job(deletedJob);
+          free_job(deletedJob); //TBD warning about this?
         }
         else
         {
@@ -240,14 +240,20 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
   }
   else if (!strcmp("fg", argv[0])) {
     /* Your code here */
+    job_t* currentJob = active_jobs_head;
+
     if(argv[1] == NULL) {
       // continue most recent stopped job
+
       //use find_last_job
+      currentJob = find_last_job(active_jobs_head);
+      continue_job(currentJob);
+      seize_tty(currentJob->pgid);
+      waiting(currentJob->first_process); //TBD need to change when implementing pipes, since not always 1st process
+      seize_tty(getpid());
     }
     else {
       pid_t job_number = atoi(argv[1]);
-      job_t* currentJob = active_jobs_head;
-
       
       while(currentJob != NULL) {
         // Need to eventually iterate through all processes?
