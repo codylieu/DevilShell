@@ -47,18 +47,18 @@ void waiting (process_t *p)
 
      if (WIFEXITED(status)) /* process exited normally */
      {
-      printf("child process exited with value %d\n", WEXITSTATUS(status));
+      //printf("child process exited with value %d\n", WEXITSTATUS(status));
       p->completed=true;
      }
     else if (WIFSIGNALED(status)) /* child exited on a signal (ctrl c) */
      {
-      printf("child process exited due to signal %d\n", WTERMSIG(status));
+      //printf("child process exited due to signal %d\n", WTERMSIG(status));
       p->completed=true;
      }
 
     else if (WIFSTOPPED(status)) /* child was stopped/suspended (ctrl z) */
      {
-      printf("child process was stopped by signal %d\n", WIFSTOPPED(status));
+      //printf("child process was stopped by signal %d\n", WIFSTOPPED(status));
       p->stopped=true;
      }
    }
@@ -104,10 +104,30 @@ void spawn_job(job_t *j, bool fg)
 
   pid_t pid;
   process_t *p;
+  int pipefd[2];
+  int next_pipefd[2];
+  int countProcess = 0;
+
+
+
+  for(p = j->first_process; p; p = p->next)
+  {
+    countProcess++;
+  } 
+
+  if(countProcess > 1)
+  {
+    pipe(pipefd);
+  }
+
+  //2-dimensional array, [number of process][input/output]
+
+
   for(p = j->first_process; p; p = p->next) {
 
 	  /* YOUR CODE HERE? */
 	  /* Builtin commands are already taken care earlier */
+ 
 
     switch (pid = fork()) {
       // int status;
@@ -125,14 +145,53 @@ void spawn_job(job_t *j, bool fg)
         if (p->ifile != NULL)
         {
           int fd = open(p->ifile, O_RDONLY);
-          dup2 (fd, STDIN_FILENO);
+          dup2(fd, STDIN_FILENO);
         }
 
         if (p->ofile != NULL)
         {
           int fd = open(p->ofile, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-          dup2 (fd, STDOUT_FILENO);
+          dup2(fd, STDOUT_FILENO);
         }
+
+        //pipe
+        if(countProcess > 1)
+        {
+          //printf("begin piping \n");
+          //first process is output        
+
+          if(p == j->first_process)
+          {
+            //printf("first process pipe\n");
+          dup2(pipefd[1], 1); //duplicate output as output for next process 
+          close(pipefd[0]);
+          close(pipefd[1]);
+          }  
+
+          else
+          {
+            //printf("second process pipe\n");
+          dup2(pipefd[0], 0);
+          close(pipefd[0]);
+          close(pipefd[1]);
+          }
+
+        }
+
+
+        //intermediate process
+        /*
+        if(p->next != NULL)
+        {
+          dup2(pipefd[0], STDIN_FILENO);
+        }
+
+        //last process
+        if(p->next == NULL)
+        {
+
+        }*/
+
 
         printf("%d (Launched): %s\n", j->pgid, j->commandinfo);
 
@@ -147,12 +206,22 @@ void spawn_job(job_t *j, bool fg)
         set_child_pgid(j, p);
 
         /* YOUR CODE HERE?  Parent-side code for new process.  */
-        // waitpid (pid, &status, 0);
-        waiting(p);
-        //printf("P completed: %d", p->completed);
-        //printf("P Stopped: %d", p->stopped);
-        //wait(NULL);
-        //p->completed = true;
+
+
+        if (p->next == NULL) //if last process
+        {
+          process_t *p2;
+
+          p2 = j->first_process;
+          while(p2 != NULL)
+          {
+            //printf("waiting for process \n");
+            waiting(p2);
+            close(pipefd[0]);
+            close(pipefd[1]);
+            p2 = p2->next;
+          }
+        }
 
         //wait for child to finish
     }
