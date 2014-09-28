@@ -99,28 +99,47 @@ void new_child(job_t *j, process_t *p, bool fg)
  * subsequent processes in a pipeline.
  * */
 
+ void closePipe(int pipefd[][2], int numberProcess)
+ {
+  int counter;
+
+  for(counter = 0; counter < (numberProcess-1); counter++)
+  {
+    close(pipefd[counter][0]);
+    close(pipefd[counter][1]);
+  }
+ }
+
 void spawn_job(job_t *j, bool fg) 
 {
 
   pid_t pid;
   process_t *p;
-  int pipefd[2];
-  int next_pipefd[2];
   int countProcess = 0;
+  int loopCounter = -1;
+  int i;
 
 
-
+  //count number of processes in the job
   for(p = j->first_process; p; p = p->next)
   {
     countProcess++;
   } 
 
+  //printf("count process: %d \n", countProcess);
+
+  int pipefd[countProcess-1][2]; //initialize 2-dimensional array [number of process][input/output]
+  //printf("test");
+
+  //open all pipes
   if(countProcess > 1)
   {
-    pipe(pipefd);
+    for(i = 0; i < (countProcess-1); i++)
+    {
+      //printf("piped %d \n", i);
+      pipe(pipefd[i]);
+    }
   }
-
-  //2-dimensional array, [number of process][input/output]
 
 
   for(p = j->first_process; p; p = p->next) {
@@ -128,6 +147,7 @@ void spawn_job(job_t *j, bool fg)
 	  /* YOUR CODE HERE? */
 	  /* Builtin commands are already taken care earlier */
  
+    loopCounter++;
 
     switch (pid = fork()) {
       // int status;
@@ -160,20 +180,43 @@ void spawn_job(job_t *j, bool fg)
           //printf("begin piping \n");
           //first process is output        
 
+          //need to loop through number of process and close all pipes
           if(p == j->first_process)
           {
-            //printf("first process pipe\n");
-          dup2(pipefd[1], 1); //duplicate output as output for next process 
-          close(pipefd[0]);
-          close(pipefd[1]);
+
+            dup2(pipefd[loopCounter][1], 1); //duplicate output as output for next process 
+            closePipe(pipefd, countProcess);
+            /*
+            close(pipefd[loopCounter][0]);
+            close(pipefd[loopCounter][1]); */
+
           }  
 
+          //last process
+          else if (p->next == NULL)
+          {
+            dup2(pipefd[loopCounter-1][0], 0);
+            closePipe(pipefd, countProcess);
+
+            /*close(pipefd[loopCounter-1][0]);
+            close(pipefd[loopCounter-1][1]);*/
+          }
+
+          //for middle: dup both input and output
+          
           else
           {
-            //printf("second process pipe\n");
-          dup2(pipefd[0], 0);
-          close(pipefd[0]);
-          close(pipefd[1]);
+            dup2(pipefd[loopCounter][1], 1);
+            dup2(pipefd[loopCounter-1][0], 0);
+
+            closePipe(pipefd, countProcess);
+
+            /*close(pipefd[loopCounter][0]);
+            close(pipefd[loopCounter][1]);
+
+            close(pipefd[loopCounter-1][0]);
+            close(pipefd[loopCounter-1][1]);*/
+
           }
 
         }
@@ -217,8 +260,22 @@ void spawn_job(job_t *j, bool fg)
           {
             //printf("waiting for process \n");
             waiting(p2);
-            close(pipefd[0]);
-            close(pipefd[1]);
+            closePipe(pipefd, countProcess);
+
+            /*
+            if (loopCounter == 0)
+            {
+              //printf("close parent pipe 0\n");
+              close(pipefd[loopCounter][0]);
+              close(pipefd[loopCounter][1]);
+            }
+            else
+            {
+              //printf("close parent pipe 1\n");
+              close(pipefd[loopCounter-1][0]);
+              close(pipefd[loopCounter-1][1]);
+            }*/
+
             p2 = p2->next;
           }
         }
@@ -227,7 +284,7 @@ void spawn_job(job_t *j, bool fg)
     }
 
     /* YOUR CODE HERE?  Parent-side code for new job.*/
-
+    //printf("assign terminal back to dsh\n");
 	  seize_tty(getpid()); // assign the terminal back to dsh
 
   }
@@ -306,6 +363,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
   }
   else if (!strcmp("bg", argv[0])) {
     /* Your code here */
+    //doesn't see terminal 
   }
   else if (!strcmp("fg", argv[0])) {
     /* Your code here */
@@ -426,3 +484,4 @@ int main()
     }
   }
 }
+    
