@@ -1,5 +1,6 @@
 
 #include "dsh.h"
+#include <signal.h>
 
 void seize_tty(pid_t callingprocess_pgid); /* Grab control of the terminal for the calling process pgid.  */
 void continue_job(job_t *j); /* resume a stopped job */
@@ -109,6 +110,74 @@ void new_child(job_t *j, process_t *p, bool fg)
     close(pipefd[counter][1]);
   }
  }
+
+ void sighandler(int sig, siginfo_t *sip, void *notused)
+ {
+    int status;
+    process_t *p;
+    job_t *j;
+    int pid;
+    bool breakLoop;
+
+    printf ("The process generating the signal is PID: %d\n", sip->si_pid);
+    fflush (stdout);
+    status = 0;
+
+/* The WNOHANG flag means that if there's no news, we don't wait*/
+    if (sip->si_pid == waitpid (sip->si_pid, &status, WNOHANG))
+    {
+      for(job_t *myJobs = active_jobs_head; myJobs; myJobs = myJobs->next)
+      {
+        for(process_t *myProcess = myJobs->first_process; myProcess; myProcess = myProcess->next)
+        {
+          if(sip == myProcess->pid)
+          {
+            p = myProcess;
+            j = myJobs;
+            breakLoop = true;
+            break;
+          }
+        }
+        if(breakLoop)
+        {
+          break;
+        }
+    }
+
+           //j=find_process(sip->si_pid, jobs, &p);
+
+           if( j == NULL)
+              return;
+           printf("find job %s\n",j->commandinfo );
+           if( j->bg == false)
+                  return;
+
+           /* A SIGCHLD doesn't necessarily mean death - a quick check */
+           if (WIFEXITED(status)|| WTERMSIG(status))
+           {
+              printf ("The child is gone\n"); /* dead */
+              p->completed=true;
+           }
+           else if (WIFSTOPPED(status)) /* child was stopped */
+           {
+              printf ("The child is stoped\n"); /* dead */
+              p->stopped=true;
+           }
+           else if (WIFSIGNALED(status))
+           {
+                       printf("#####child process not exist, ctrl-z\n");
+                       p->stopped=true;
+           }
+           else
+              printf ("Uninteresting\n"); /* alive */
+    }
+    else
+    {
+         /* If there's no news, we're probably not interested, either */
+         printf ("Uninteresting\n");
+    }
+}
+ 
 
 void spawn_job(job_t *j, bool fg) 
 {
@@ -259,22 +328,25 @@ void spawn_job(job_t *j, bool fg)
           while(p2 != NULL)
           {
             //printf("waiting for process \n");
-            waiting(p2);
-            closePipe(pipefd, countProcess);
 
-            /*
-            if (loopCounter == 0)
+            //if fg true waiting, else bg stuff
+
+            if(fg == true)
             {
-              //printf("close parent pipe 0\n");
-              close(pipefd[loopCounter][0]);
-              close(pipefd[loopCounter][1]);
+              waiting(p2);
             }
             else
             {
-              //printf("close parent pipe 1\n");
-              close(pipefd[loopCounter-1][0]);
-              close(pipefd[loopCounter-1][1]);
-            }*/
+              struct sigaction action;
+              action.sa_sigaction = sighandler;
+
+              sigfillset(&action.sa_mask);
+              action.sa_flags = SA_SIGINFO;
+              sigaction(SIGCHLD, &action, NULL);
+            }
+            
+            closePipe(pipefd, countProcess);
+
 
             p2 = p2->next;
           }
@@ -331,9 +403,14 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
          //currentJob->notified = true;
       }
       //otherwise it is stopped
-      else
+      else if (job_is_stopped(currentJob) == true)
       {
         printf("%d (Stopped): %s\n", currentJob->pgid, currentJob->commandinfo);
+      }
+
+      else
+      {
+        printf("%d (Running): %s\n", currentJob->pgid, currentJob->commandinfo);
       }
 
       currentJob = currentJob->next;
@@ -363,11 +440,85 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
   }
   else if (!strcmp("bg", argv[0])) {
     /* Your code here */
-    //doesn't see terminal 
+    job_t* currentJob = active_jobs_head;
+    process_t* p2;
+
+    if(argv[1] == NULL) 
+    {
+      // continue most recent stopped job
+
+      //use find_last_job
+      currentJob = find_last_job(active_jobs_head);
+
+      continue_job(currentJob);
+      seize_tty(currentJob->pgid);
+
+
+      p2 = currentJob->first_process;
+
+      while(p2 != NULL)
+      {
+        p2->stopped = false;
+        
+        struct sigaction action;
+        action.sa_sigaction = sighandler;
+
+        sigfillset(&action.sa_mask);
+        action.sa_flags = SA_SIGINFO;
+        sigaction(SIGCHLD, &action, NULL);
+
+        p2 = p2->next;
+      }
+      seize_tty(getpid());
+    }
+
+    else 
+    {
+      pid_t job_number = atoi(argv[1]);
+
+      
+      while(currentJob != NULL) {
+        // Need to eventually iterate through all processes?
+        
+        if((job_is_stopped(currentJob)) && currentJob->pgid == job_number) {
+          //seize_tty(currentJob->pgid);
+          continue_job(currentJob); 
+          seize_tty(currentJob->pgid);
+
+          p2 = currentJob->first_process;
+          while (p2 != NULL)
+          {
+            p2->stopped = false; 
+
+            struct sigaction action;
+            action.sa_sigaction = sighandler;
+
+            sigfillset(&action.sa_mask);
+            action.sa_flags = SA_SIGINFO;
+            sigaction(SIGCHLD, &action, NULL);
+            p2 = p2->next;
+          }
+
+          seize_tty(getpid());
+          break;
+        }
+        else if (currentJob->pgid == job_number) {
+          printf("%s\n", "This process wasn't stopped`");
+        }
+        else {
+          printf("%s\n", "This job number is not the requested one");
+        }
+        currentJob = currentJob->next;
+      }
+    }
+    return true;
   }
+
+
   else if (!strcmp("fg", argv[0])) {
     /* Your code here */
     job_t* currentJob = active_jobs_head;
+    process_t* p2;
 
     if(argv[1] == NULL) {
       // continue most recent stopped job
@@ -376,20 +527,35 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
       currentJob = find_last_job(active_jobs_head);
       continue_job(currentJob);
       seize_tty(currentJob->pgid);
-      waiting(currentJob->first_process); //TBD need to change when implementing pipes, since not always 1st process
+
+
+      p2 = currentJob->first_process;
+
+      while(p2 != NULL)
+      {
+        waiting(p2);
+        p2 = p2->next;
+      }
       seize_tty(getpid());
     }
     else {
       pid_t job_number = atoi(argv[1]);
+
       
       while(currentJob != NULL) {
         // Need to eventually iterate through all processes?
         
-        if((currentJob->first_process)->stopped == true && currentJob->pgid == job_number) {
+        if((job_is_stopped(currentJob)) && currentJob->pgid == job_number) {
           //seize_tty(currentJob->pgid);
           continue_job(currentJob); 
           seize_tty(currentJob->pgid);
-          waiting(currentJob->first_process); //TBD need to change when implementing pipes, since not always 1st process
+
+          p2 = currentJob->first_process;
+          while (p2 != NULL)
+          {
+            waiting(p2);
+            p2 = p2->next;
+          }
           seize_tty(getpid());
           break;
         }
@@ -462,7 +628,15 @@ int main()
       bool is_built_in_cmd = builtin_cmd(j, (j->first_process)->argc, (j->first_process)->argv);
       if(!is_built_in_cmd) 
       {
-        spawn_job(j, true);
+
+        if(j->bg == true)
+        {
+          spawn_job(j, false);
+        }
+        else
+        {
+          spawn_job(j, true);
+        }
 
         if(active_jobs_head == NULL) 
         {
