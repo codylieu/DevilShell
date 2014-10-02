@@ -27,7 +27,6 @@ void waiting (process_t *p)
   while ((got_pid = waitpid(p->pid, &status, WUNTRACED))) 
   {
     /* go to sleep until something happens */
-    /* wait woke up */
     if (got_pid == p->pid)
     {
       break;
@@ -36,7 +35,7 @@ void waiting (process_t *p)
     if ((got_pid == -1) && (errno != EINTR)) 
     {
     /* an error other than an interrupted system call */
-    printf("#####child process not exist\n");
+    //printf("#####child process not exist\n");
     p->completed=true;
     break;
     }
@@ -116,10 +115,9 @@ void new_child(job_t *j, process_t *p, bool fg)
     int status;
     process_t *p;
     job_t *j;
-    int pid;
     bool breakLoop;
 
-    printf ("The process generating the signal is PID: %d\n", sip->si_pid);
+    //printf ("The process generating the signal is PID: %d\n", sip->si_pid);
     fflush (stdout);
     status = 0;
 
@@ -144,38 +142,31 @@ void new_child(job_t *j, process_t *p, bool fg)
         }
     }
 
-           //j=find_process(sip->si_pid, jobs, &p);
-
            if( j == NULL)
               return;
-           printf("find job %s\n",j->commandinfo );
+           //printf("find job %s\n",j->commandinfo );
            if( j->bg == false)
                   return;
 
            /* A SIGCHLD doesn't necessarily mean death - a quick check */
            if (WIFEXITED(status)|| WTERMSIG(status))
            {
-              printf ("The child is gone\n"); /* dead */
+              //printf ("The child is gone\n"); /* dead */
               p->completed=true;
            }
            else if (WIFSTOPPED(status)) /* child was stopped */
            {
-              printf ("The child is stoped\n"); /* dead */
+              //printf ("The child is stoped\n"); /* dead */
               p->stopped=true;
            }
            else if (WIFSIGNALED(status))
            {
-                       printf("#####child process not exist, ctrl-z\n");
+                       //printf("#####child process not exist, ctrl-z\n");
                        p->stopped=true;
            }
-           else
-              printf ("Uninteresting\n"); /* alive */
     }
-    else
-    {
-         /* If there's no news, we're probably not interested, either */
-         printf ("Uninteresting\n");
-    }
+
+
 }
  
 
@@ -255,9 +246,6 @@ void spawn_job(job_t *j, bool fg)
 
             dup2(pipefd[loopCounter][1], 1); //duplicate output as output for next process 
             closePipe(pipefd, countProcess);
-            /*
-            close(pipefd[loopCounter][0]);
-            close(pipefd[loopCounter][1]); */
 
           }  
 
@@ -267,8 +255,6 @@ void spawn_job(job_t *j, bool fg)
             dup2(pipefd[loopCounter-1][0], 0);
             closePipe(pipefd, countProcess);
 
-            /*close(pipefd[loopCounter-1][0]);
-            close(pipefd[loopCounter-1][1]);*/
           }
 
           //for middle: dup both input and output
@@ -280,30 +266,10 @@ void spawn_job(job_t *j, bool fg)
 
             closePipe(pipefd, countProcess);
 
-            /*close(pipefd[loopCounter][0]);
-            close(pipefd[loopCounter][1]);
-
-            close(pipefd[loopCounter-1][0]);
-            close(pipefd[loopCounter-1][1]);*/
 
           }
 
         }
-
-
-        //intermediate process
-        /*
-        if(p->next != NULL)
-        {
-          dup2(pipefd[0], STDIN_FILENO);
-        }
-
-        //last process
-        if(p->next == NULL)
-        {
-
-        }*/
-
 
         printf("%d (Launched): %s\n", j->pgid, j->commandinfo);
 
@@ -543,7 +509,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
 
       
       while(currentJob != NULL) {
-        // Need to eventually iterate through all processes?
+        
         
         if((job_is_stopped(currentJob)) && currentJob->pgid == job_number) {
           //seize_tty(currentJob->pgid);
@@ -641,7 +607,7 @@ int main()
         if(active_jobs_head == NULL) 
         {
         active_jobs_head = j;
-        //active_jobs = j;
+        
         }
 
         else 
@@ -649,8 +615,7 @@ int main()
         job_t *lastJob = find_last_job(active_jobs_head);
         lastJob->next = j;
         j->next = NULL;
-        //active_jobs->next = j;
-        //active_jobs = active_jobs->next;
+
         }
       }
 

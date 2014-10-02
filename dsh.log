@@ -1,0 +1,6 @@
+28846(Launched): cat 
+28846(Stopped): cat 
+28847(Launched): cat
+cat: stdin: Interrupted system call
+28846(Stopped): cat 
+28847(Completed): cat

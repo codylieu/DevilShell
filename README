@@ -10,17 +10,14 @@
 	Please follow the format or our scripts will break. 
 */
 
-	Name1: 
-	NetId1: 
-	Time spent: 10 hours
+	Name1: Brian Khoe
+	NetId1: bjk14
+	Time spent: 20 hours
 
-	Name2: 
-	NetId2:
-	Time spent: 10 hours
+	Name2: Cody Lieu	
+	NetId2: cal53
+	Time spent: 20 hours
 
-	Name3: 
-	NetId3:
-	Time spent: 10 hours
 
 /******************
  * Files to submit
@@ -49,19 +46,23 @@
  * details to maximize your partial credit.  
  * */
 
+ In order to implement multiple pipelines, our shell executed all processes in a pipeline concurrently and waited for all the processes to finish running
+ with our waiting() method. Our waiting() method used waitpid with WUNTRACED to wait for the processes, and also marked "completed" or "true" for the process based on signal received (finished normally, ctrl+c, or ctrl+z). In the child processes, we check for any redirection that needs to be done and also implement the pipeline. Our file descriptor, pipefd, is a two dimensional array, where the first array is the size of the number of processes in the pipeline, and the second array is of size 2 (0 for output, 1 for input). This two-dimensional array allowed us to easily keep track of what process we were in when dealing with jobs with multiply processes. The output of each process is then sent as the input for the next process, and continues until we have iterated through all the processes. Once we receive the output from the last process, it is shown on the terminal (or file if redirected).
+
+ In our job control, we checked to see whether each job was completed, stopped, or running. We are easily to able to check this with the helper functions jobs_is_comppleted and job_is_stopped . If a job is completed, we then also need to delete the job, since saving all completed jobs is not necessary. For the fg implementation, we kept an active_jobs_head to keep track of all the active/suspended jobs. Then, we could easily call find_last_job to find the job that we needed to continue when implementing fg. When using fg with a specific PID, we iterate through the list of active jobs until we find the job to bring back to the foreground. If the job does not exist, we will print out an error statement. For the extra-credit implementation of bg, we used a similar method to the fg. The main difference ,however, was that instead of using waitpid(with our waiting() method), we used a signal implemented with the sighandler method. The parent still needs control of the terminal when using bg, and so it cannot be waiting(and not responding to commands) while child processes run. The signal allows the parent to know when something happens to child, without having to actually "wait". For the cd command, we used chdir with the passed argument.
+
+As noted earlier, our waiting() method, which is called in spawn_job, marks processes as completed or true based on the signal received. If there are errors, the shell will print out statements notifying the shell user of an error. Our shell will check if there is an error other than an interrupted system call, if there is a fork failure, if execs fail, if a requested PID is not found, etc. 
+
+For .c compilation, we fork a child. Then, the parent waits for the child to compile. Once the child returns, we execute the compiled file. 
+
 /************************
  * Feedback on the lab
  ************************/
 
-/*
- * Any comments/questions/suggestions/experiences that you would help us to
- * improve the lab.
- * */
+The lab was pretty interesting, but some of the minute details got frustarting. 
 
 /************************
  * References
  ************************/
 
-/*
- * List of collaborators involved including any online references/citations.
- * */
+We used online resources(e.g. StackOverflow), especially for the implementation of bg with signal handlers. 
