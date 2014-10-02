@@ -401,7 +401,10 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
   }
 
   else if (!strcmp("cd", argv[0])) {
-    chdir(argv[1]);
+    int chdir_return = chdir(argv[1]);
+    if(chdir_return == -1) {
+      printf("cd: %s: No such file or directory\n", argv[1]);
+    }
     return true;
   }
   else if (!strcmp("bg", argv[0])) {
@@ -574,7 +577,7 @@ int main()
 
         /* Only for debugging purposes to show parser output; turn off in the
          * final code */
-    if(PRINT_INFO) print_job(j);
+    // if(PRINT_INFO) print_job(j);
 
         /* Your code goes here */
         /* You need to loop through jobs list since a command line can contain ;*/

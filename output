@@ -1,0 +1,23 @@
+4155 (Launched): cat < Makefile | wc < Makefile | ls > output
+Makefile
+README
+README.CONTENTS
+batchFile
+cmds
+dsh
+dsh-example
+dsh-osx
+dsh.c
+dsh.dSYM
+dsh.h
+dsh.log
+fork-examples
+hello.c
+hello.txt
+helper.c
+lab2-faq.txt
+lab2.pdf
+out
+output
+parse.c
+test-dir
